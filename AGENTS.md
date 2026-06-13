@@ -48,10 +48,14 @@ Purpose: keep a laptop awake (incl. lid-closed) while AI agents run.
   manual toggle. Polls every 8s via `processRunning()` (`pgrep -f -i`). Watch
   state persists in `UserDefaults` (`watchEnabled`, `watchPattern`).
 - Privilege: app shells `sudo -n /usr/bin/pmset …`. `-n` fails fast when the
-  sudoers rule is absent. Manual toggles then fall back to a native admin
-  prompt (`applyPmsetElevated` via osascript, `allowPrompt: true`); the watcher
-  passes `allowPrompt: false` so its 8s poll never prompts — it just sets
-  `needsSetup`. Keep that split: only user-initiated actions may prompt.
+  sudoers rule is absent. Manual toggles fall back to a native admin prompt
+  (`applyPmsetElevated`, `allowPrompt: true`). The watcher never prompts
+  per-tick (`allowPrompt: false`); instead, when the user *interactively* flips
+  watch mode on, `reschedule()` installs the passwordless rule once via
+  `installSudoersElevated()` (osascript admin prompt). This is gated on
+  `didInit` so launch-restore never prompts, and on `passwordlessReady()` so an
+  already-configured machine doesn't re-prompt. Keep that split: only
+  user-initiated actions may prompt; the 8s poll must stay silent.
 - Run shell work off the main actor (`Task.detached`), hop back via
   `MainActor.run`. Keep it Swift 6 concurrency-clean (no captured `var`s across
   the actor hop).

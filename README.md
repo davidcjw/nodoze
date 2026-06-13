@@ -62,27 +62,25 @@ open NoDoze.app     # runs as a menu bar app (no dock icon)
 Requires the Swift toolchain (`swiftc`) — already present with Xcode or the
 Command Line Tools. macOS 13+.
 
-## One-time setup (password-free toggling)
+## Permissions (no setup needed)
 
-`pmset` needs root. To toggle silently, allow the current user to run `pmset`
-without a password:
+`pmset` needs root, and NoDoze handles that for you:
 
-```bash
-./scripts/install-sudoers.sh     # validates with visudo, then installs
-```
+- **Manual toggle** — the first time you flip it, macOS shows the standard admin
+  password prompt. Approve it and you're done.
+- **Watch mode** — a background poll can't keep prompting, so the first time you
+  enable it, NoDoze installs a passwordless-sudo rule for `pmset` via **one**
+  native admin prompt (validated with `visudo`). After that it runs silently.
 
-This writes `/etc/sudoers.d/nodoze` containing:
+That rule lives at `/etc/sudoers.d/nodoze`:
 
 ```
 <you> ALL=(root) NOPASSWD: /usr/bin/pmset
 ```
 
-Until you run this, NoDoze shows **"Setup required"** in the popover and the
-toggle is a no-op. Undo anytime:
-
-```bash
-./scripts/uninstall-sudoers.sh
-```
+There's nothing to run by hand. The bundled `scripts/install-sudoers.sh` /
+`uninstall-sudoers.sh` are just manual equivalents if you'd rather set it up (or
+tear it down) yourself.
 
 ## Run at login (optional)
 
@@ -106,11 +104,10 @@ Two things to know about distributing an unsigned app:
   flag, so the cask strips the quarantine flag itself in a `postflight`. (The
   fully clean path is the $99/yr Developer Program → sign with a *Developer ID
   Application* cert → `notarytool submit` → `stapler staple`.)
-- **The `pmset` privilege.** A **manual** toggle works out of the box: if
-  passwordless sudo isn't set up, NoDoze falls back to a native macOS admin
-  prompt (`do shell script … with administrator privileges`). The **auto-watch**
-  mode needs passwordless sudo (`scripts/install-sudoers.sh`) so it never
-  prompts on its 8s poll.
+- **The `pmset` privilege.** Handled in-app, no setup step. A **manual** toggle
+  falls back to a native admin prompt; enabling **watch mode** installs a
+  passwordless-sudo rule for `pmset` via one admin prompt so the 8s poll runs
+  silently. See "Permissions" above.
 
 The live cask lives at
 [davidcjw/homebrew-tap](https://github.com/davidcjw/homebrew-tap/blob/main/Casks/nodoze.rb).

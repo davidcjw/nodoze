@@ -9,6 +9,15 @@ func parseSleepDisabled(_ pmsetOutput: String) -> Bool {
 /// What the process-watcher should do on a given tick.
 enum WatchAction: Equatable { case keepAwake, allowSleep, doNothing }
 
+/// Shell command (run once, as root) that installs the passwordless-sudo rule
+/// for pmset — so the watcher can act silently. Validates with visudo before
+/// installing. Pure builder so it can be unit-tested; executed via an osascript
+/// admin prompt in the app.
+func sudoersInstallCommand(user: String) -> String {
+    "t=$(mktemp); echo '\(user) ALL=(root) NOPASSWD: /usr/bin/pmset' > \"$t\"; " +
+    "/usr/sbin/visudo -cf \"$t\" && /usr/bin/install -m 0440 -o root -g wheel \"$t\" /etc/sudoers.d/nodoze; rm -f \"$t\""
+}
+
 /// Subtitle shown under the "stay awake while a process runs" toggle.
 func watchSubtitle(enabled: Bool, running: Bool, pattern: String) -> String {
     guard enabled else { return "e.g. claude, ollama, node" }

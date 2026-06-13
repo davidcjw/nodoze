@@ -41,7 +41,7 @@ struct PopoverContent: View {
             .disabled(busy)
 
             if needsSetup {
-                Text("Run scripts/install-sudoers.sh once to enable password-free toggling.")
+                Text("Permission needed — flip the toggle again and approve the prompt.")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

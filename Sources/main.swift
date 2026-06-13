@@ -56,6 +56,24 @@ func applyPmsetElevated(enable: Bool) -> Bool {
     return code != 0
 }
 
+/// True if pmset can already be run without a password (sudoers rule present).
+/// `pmset -g` is read-only, so this probes permission without changing state.
+func passwordlessReady() -> Bool {
+    run("/usr/bin/sudo", ["-n", "/usr/bin/pmset", "-g"]).0 == 0
+}
+
+/// Installs the passwordless-sudo rule via one native admin prompt, so the
+/// watcher can act silently afterwards. Returns true on failure/cancel.
+func installSudoersElevated() -> Bool {
+    let cmd = sudoersInstallCommand(user: NSUserName())
+    let escaped = cmd
+        .replacingOccurrences(of: "\\", with: "\\\\")
+        .replacingOccurrences(of: "\"", with: "\\\"")
+    let script = "do shell script \"\(escaped)\" with administrator privileges"
+    let (code, _) = run("/usr/bin/osascript", ["-e", script])
+    return code != 0
+}
+
 // MARK: - Model
 
 @MainActor
@@ -70,6 +88,7 @@ final class SleepModel: ObservableObject {
 
     private var owned = false            // did the watcher set the current awake state?
     private var timer: Timer?
+    private var didInit = false          // true once init() finished restoring state
     private let defaults = UserDefaults.standard
 
     init() {
@@ -77,7 +96,10 @@ final class SleepModel: ObservableObject {
             watchPattern = saved
         }
         refresh()
-        watchEnabled = defaults.bool(forKey: "watchEnabled")   // triggers reschedule()
+        // Restore the saved toggle WITHOUT prompting — only a deliberate flip
+        // (after init) should trigger the one-time admin prompt.
+        watchEnabled = defaults.bool(forKey: "watchEnabled")
+        didInit = true
     }
 
     var statusText: String {
@@ -130,6 +152,21 @@ final class SleepModel: ObservableObject {
             if owned { owned = false; apply(enable: false) }   // restore sleep we forced
             return
         }
+        // When the user flips watch mode on, install the passwordless-sudo rule
+        // once (a single admin prompt) so the 8s poll can act silently. Skipped
+        // on launch-restore (didInit == false) and when already set up.
+        if didInit {
+            Task.detached(priority: .userInitiated) {
+                let needsInstall = !passwordlessReady()
+                if needsInstall { _ = installSudoersElevated() }
+                await MainActor.run { self.startWatchTimer() }
+            }
+        } else {
+            startWatchTimer()
+        }
+    }
+
+    private func startWatchTimer() {
         tick()
         timer = Timer.scheduledTimer(withTimeInterval: 8, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.tick() }

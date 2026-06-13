@@ -37,6 +37,15 @@ struct Tests {
         check("subtitle: not running -> sleep normal",
               watchSubtitle(enabled: true, running: false, pattern: "ollama") == "‘ollama’ not running — sleep normal")
 
+        // Sudoers install command builder.
+        let cmd = sudoersInstallCommand(user: "alice")
+        check("sudoers cmd: includes user + NOPASSWD pmset",
+              cmd.contains("alice ALL=(root) NOPASSWD: /usr/bin/pmset"))
+        check("sudoers cmd: validates with visudo",
+              cmd.contains("/usr/sbin/visudo -cf"))
+        check("sudoers cmd: installs to /etc/sudoers.d/nodoze with 0440",
+              cmd.contains("-m 0440 -o root -g wheel") && cmd.contains("/etc/sudoers.d/nodoze"))
+
         if failures > 0 { print("\(failures) test(s) failed"); exit(1) }
         print("All tests passed")
     }
