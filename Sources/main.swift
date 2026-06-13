@@ -1,0 +1,244 @@
+import SwiftUI
+import AppKit
+
+// MARK: - Shell
+
+/// Runs a process to completion and returns (exitCode, combined stdout+stderr).
+/// Free function so it is safe to call from a detached (off-main) task.
+@discardableResult
+func run(_ launchPath: String, _ args: [String]) -> (Int32, String) {
+    let proc = Process()
+    proc.executableURL = URL(fileURLWithPath: launchPath)
+    proc.arguments = args
+    let pipe = Pipe()
+    proc.standardOutput = pipe
+    proc.standardError = pipe
+    do { try proc.run() } catch { return (-1, "\(error)") }
+    proc.waitUntilExit()
+    let data = pipe.fileHandleForReading.readDataToEndOfFile()
+    return (proc.terminationStatus, String(data: data, encoding: .utf8) ?? "")
+}
+
+/// True if any process matches `pattern` (case-insensitive, full command line).
+func processRunning(_ pattern: String) -> Bool {
+    let trimmed = pattern.trimmingCharacters(in: .whitespaces)
+    guard !trimmed.isEmpty else { return false }
+    let (code, _) = run("/usr/bin/pgrep", ["-f", "-i", trimmed])
+    return code == 0
+}
+
+/// The three pmset args for the on/off state — single source of truth.
+func pmsetSteps(enable: Bool) -> [[String]] {
+    enable
+        ? [["-a", "sleep", "0"], ["-a", "hibernatemode", "0"], ["-a", "disablesleep", "1"]]
+        : [["-a", "sleep", "1"], ["-a", "hibernatemode", "3"], ["-a", "disablesleep", "0"]]
+}
+
+/// Passwordless attempt. Returns true if sudo lacked permission (needs setup).
+func applyPmset(enable: Bool) -> Bool {
+    for step in pmsetSteps(enable: enable) {
+        let (code, _) = run("/usr/bin/sudo", ["-n", "/usr/bin/pmset"] + step)
+        if code != 0 { return true }   // -n fails fast if a password is required
+    }
+    return false
+}
+
+/// Fallback for machines without the passwordless-sudo setup: run all three
+/// pmset commands under one native admin prompt via osascript. Returns true on
+/// failure (e.g. the user cancelled the auth dialog). Used only for manual
+/// toggles — never the 8s watcher, which must not prompt.
+func applyPmsetElevated(enable: Bool) -> Bool {
+    let cmd = pmsetSteps(enable: enable)
+        .map { "/usr/bin/pmset " + $0.joined(separator: " ") }
+        .joined(separator: " && ")
+    let script = "do shell script \"\(cmd)\" with administrator privileges"
+    let (code, _) = run("/usr/bin/osascript", ["-e", script])
+    return code != 0
+}
+
+// MARK: - Model
+
+@MainActor
+final class SleepModel: ObservableObject {
+    @Published var isAwake = false      // true == system sleep disabled
+    @Published var busy = false
+    @Published var needsSetup = false   // passwordless sudo not configured
+
+    @Published var watchEnabled = false { didSet { persist(); reschedule() } }
+    @Published var watchPattern = "claude" { didSet { persist() } }
+    @Published var watchRunning = false
+
+    private var owned = false            // did the watcher set the current awake state?
+    private var timer: Timer?
+    private let defaults = UserDefaults.standard
+
+    init() {
+        if let saved = defaults.string(forKey: "watchPattern"), !saved.isEmpty {
+            watchPattern = saved
+        }
+        refresh()
+        watchEnabled = defaults.bool(forKey: "watchEnabled")   // triggers reschedule()
+    }
+
+    var statusText: String {
+        if needsSetup { return "Setup required" }
+        return isAwake ? "Sleep off · lid-close safe" : "Normal sleep"
+    }
+
+    func refresh() {
+        let (_, out) = run("/usr/bin/pmset", ["-g"])
+        isAwake = parseSleepDisabled(out)
+    }
+
+    /// Manual toggle from the switch. Allows an admin prompt if passwordless
+    /// sudo isn't set up. Clears watcher ownership so the watcher won't later
+    /// undo a deliberate choice.
+    func toggle() { apply(enable: !isAwake, allowPrompt: true) { self.owned = false } }
+
+    /// - allowPrompt: if passwordless sudo fails, fall back to a native admin
+    ///   prompt. True for manual toggles, false for the watcher (no nagging).
+    private func apply(enable: Bool, allowPrompt: Bool = false, then: (() -> Void)? = nil) {
+        guard !busy else { return }
+        busy = true
+        Task.detached(priority: .userInitiated) {
+            var failed = applyPmset(enable: enable)
+            if failed && allowPrompt {
+                failed = applyPmsetElevated(enable: enable)
+            }
+            let didFail = failed
+            await MainActor.run {
+                self.needsSetup = didFail
+                self.refresh()
+                self.busy = false
+                then?()
+            }
+        }
+    }
+
+    // MARK: Process watcher
+
+    private func persist() {
+        defaults.set(watchEnabled, forKey: "watchEnabled")
+        defaults.set(watchPattern, forKey: "watchPattern")
+    }
+
+    private func reschedule() {
+        timer?.invalidate()
+        timer = nil
+        guard watchEnabled else {
+            watchRunning = false
+            if owned { owned = false; apply(enable: false) }   // restore sleep we forced
+            return
+        }
+        tick()
+        timer = Timer.scheduledTimer(withTimeInterval: 8, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.tick() }
+        }
+    }
+
+    func tick() {
+        let running = processRunning(watchPattern)
+        watchRunning = running
+        refresh()
+        switch watchDecision(running: running, isAwake: isAwake, owned: owned) {
+        case .keepAwake:  apply(enable: true)  { self.owned = true }
+        case .allowSleep: apply(enable: false) { self.owned = false }
+        case .doNothing:  break
+        }
+    }
+}
+
+// MARK: - UI
+
+struct PopoverView: View {
+    @ObservedObject var model: SleepModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: model.isAwake ? "cup.and.saucer.fill" : "cup.and.saucer")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(model.isAwake ? Color.orange : Color.secondary)
+                Text("NoDoze").font(.headline)
+                Spacer()
+            }
+
+            Divider()
+
+            Toggle(isOn: Binding(get: { model.isAwake }, set: { _ in model.toggle() })) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Keep Mac Awake").font(.callout.weight(.medium))
+                    Text(model.statusText)
+                        .font(.caption)
+                        .foregroundStyle(model.needsSetup ? Color.orange : Color.secondary)
+                }
+            }
+            .toggleStyle(.switch)
+            .tint(.orange)
+            .disabled(model.busy)
+
+            if model.needsSetup {
+                Text("Run scripts/install-sudoers.sh once to enable password-free toggling.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Divider()
+
+            Toggle(isOn: $model.watchEnabled) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Stay awake while a process runs").font(.callout.weight(.medium))
+                    Text(watchSubtitle)
+                        .font(.caption)
+                        .foregroundStyle(model.watchEnabled && model.watchRunning ? Color.green : Color.secondary)
+                }
+            }
+            .toggleStyle(.switch)
+            .tint(.orange)
+
+            if model.watchEnabled {
+                TextField("process name", text: $model.watchPattern)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.callout)
+            }
+
+            Divider()
+
+            HStack {
+                Button { model.refresh() } label: { Image(systemName: "arrow.clockwise") }
+                    .buttonStyle(.borderless)
+                    .help("Refresh state")
+                Spacer()
+                Button("Quit") { NSApplication.shared.terminate(nil) }
+                    .buttonStyle(.borderless)
+            }
+            .font(.caption)
+        }
+        .padding(14)
+        .frame(width: 268)
+    }
+
+    private var watchSubtitle: String {
+        guard model.watchEnabled else { return "e.g. claude, ollama, node" }
+        let name = model.watchPattern.trimmingCharacters(in: .whitespaces)
+        return model.watchRunning ? "‘\(name)’ running — keeping awake"
+                                  : "‘\(name)’ not running — sleep normal"
+    }
+}
+
+// MARK: - App
+
+@main
+struct NoDozeApp: App {
+    @StateObject private var model = SleepModel()
+
+    var body: some Scene {
+        MenuBarExtra {
+            PopoverView(model: model)
+        } label: {
+            Image(systemName: model.isAwake ? "cup.and.saucer.fill" : "cup.and.saucer")
+        }
+        .menuBarExtraStyle(.window)
+    }
+}

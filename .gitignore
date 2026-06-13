@@ -1,0 +1,5 @@
+NoDoze.app/
+.DS_Store
+*.swiftmodule
+AppIcon.icns
+NoDoze.zip
