@@ -13,6 +13,10 @@ cp "$ROOT/Info.plist" "$APP/Contents/Info.plist"
 [ -f "$ROOT/AppIcon.icns" ] || bash "$ROOT/scripts/build_icns.sh"
 cp "$ROOT/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
 
+# Bundle the sudoers helpers so installed users can run them from the .app.
+cp "$ROOT/scripts/install-sudoers.sh" "$ROOT/scripts/uninstall-sudoers.sh" \
+    "$APP/Contents/Resources/"
+
 swiftc -O -parse-as-library \
     "$ROOT/Sources/SleepState.swift" \
     "$ROOT/Sources/main.swift" \
