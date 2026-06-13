@@ -27,6 +27,14 @@ Purpose: keep a laptop awake (incl. lid-closed) while AI agents run.
 - `scripts/make_icon.swift` + `scripts/build_icns.sh` — render `AppIcon.icns`
   from code (coffee cup on #FF5700 squircle). `build.sh` regenerates it if the
   `.icns` is absent; delete `AppIcon.icns` and rebuild to refresh the art.
+- `Sources/PopoverContent.swift` — pure, value-driven popover UI (no model).
+  `PopoverView` in main.swift is just a thin wrapper binding the model to it.
+- `scripts/make_demo_gif.swift` + `scripts/build_demo_gif.sh` — render
+  `docs/demo.gif`. NOTE: `ImageRenderer` can't rasterize AppKit controls
+  (NSSwitch/NSTextField/NSButton) headlessly — they come out blank — and it
+  blooms `.shadow` onto every child. So the demo uses a `DemoPopover` of pure
+  SwiftUI shapes mirroring PopoverContent, with no shadows. Keep it in sync with
+  PopoverContent if the real UI changes.
 
 ## Conventions / gotchas
 - The toggle MUST keep matching the aliases exactly:

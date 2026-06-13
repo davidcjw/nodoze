@@ -19,6 +19,7 @@ cp "$ROOT/scripts/install-sudoers.sh" "$ROOT/scripts/uninstall-sudoers.sh" \
 
 swiftc -O -parse-as-library \
     "$ROOT/Sources/SleepState.swift" \
+    "$ROOT/Sources/PopoverContent.swift" \
     "$ROOT/Sources/main.swift" \
     -o "$BIN_DIR/NoDoze"
 

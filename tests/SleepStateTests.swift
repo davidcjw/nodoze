@@ -29,6 +29,14 @@ struct Tests {
         check("stopped + asleep -> nothing",
               watchDecision(running: false, isAwake: false, owned: false) == .doNothing)
 
+        // Watch subtitle text.
+        check("subtitle: disabled -> hint",
+              watchSubtitle(enabled: false, running: false, pattern: "claude") == "e.g. claude, ollama, node")
+        check("subtitle: running -> keeping awake",
+              watchSubtitle(enabled: true, running: true, pattern: "claude") == "‘claude’ running — keeping awake")
+        check("subtitle: not running -> sleep normal",
+              watchSubtitle(enabled: true, running: false, pattern: "ollama") == "‘ollama’ not running — sleep normal")
+
         if failures > 0 { print("\(failures) test(s) failed"); exit(1) }
         print("All tests passed")
     }

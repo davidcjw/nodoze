@@ -9,6 +9,14 @@ func parseSleepDisabled(_ pmsetOutput: String) -> Bool {
 /// What the process-watcher should do on a given tick.
 enum WatchAction: Equatable { case keepAwake, allowSleep, doNothing }
 
+/// Subtitle shown under the "stay awake while a process runs" toggle.
+func watchSubtitle(enabled: Bool, running: Bool, pattern: String) -> String {
+    guard enabled else { return "e.g. claude, ollama, node" }
+    let name = pattern.trimmingCharacters(in: .whitespaces)
+    return running ? "‘\(name)’ running — keeping awake"
+                   : "‘\(name)’ not running — sleep normal"
+}
+
 /// Pure decision for the watcher so it stays unit-testable.
 /// - running: is the watched process alive?
 /// - isAwake: is sleep currently disabled?

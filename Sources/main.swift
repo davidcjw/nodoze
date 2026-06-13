@@ -154,76 +154,19 @@ struct PopoverView: View {
     @ObservedObject var model: SleepModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                Image(systemName: model.isAwake ? "cup.and.saucer.fill" : "cup.and.saucer")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(model.isAwake ? Color.orange : Color.secondary)
-                Text("NoDoze").font(.headline)
-                Spacer()
-            }
-
-            Divider()
-
-            Toggle(isOn: Binding(get: { model.isAwake }, set: { _ in model.toggle() })) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Keep Mac Awake").font(.callout.weight(.medium))
-                    Text(model.statusText)
-                        .font(.caption)
-                        .foregroundStyle(model.needsSetup ? Color.orange : Color.secondary)
-                }
-            }
-            .toggleStyle(.switch)
-            .tint(.orange)
-            .disabled(model.busy)
-
-            if model.needsSetup {
-                Text("Run scripts/install-sudoers.sh once to enable password-free toggling.")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Divider()
-
-            Toggle(isOn: $model.watchEnabled) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Stay awake while a process runs").font(.callout.weight(.medium))
-                    Text(watchSubtitle)
-                        .font(.caption)
-                        .foregroundStyle(model.watchEnabled && model.watchRunning ? Color.green : Color.secondary)
-                }
-            }
-            .toggleStyle(.switch)
-            .tint(.orange)
-
-            if model.watchEnabled {
-                TextField("process name", text: $model.watchPattern)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.callout)
-            }
-
-            Divider()
-
-            HStack {
-                Button { model.refresh() } label: { Image(systemName: "arrow.clockwise") }
-                    .buttonStyle(.borderless)
-                    .help("Refresh state")
-                Spacer()
-                Button("Quit") { NSApplication.shared.terminate(nil) }
-                    .buttonStyle(.borderless)
-            }
-            .font(.caption)
-        }
-        .padding(14)
-        .frame(width: 268)
-    }
-
-    private var watchSubtitle: String {
-        guard model.watchEnabled else { return "e.g. claude, ollama, node" }
-        let name = model.watchPattern.trimmingCharacters(in: .whitespaces)
-        return model.watchRunning ? "‘\(name)’ running — keeping awake"
-                                  : "‘\(name)’ not running — sleep normal"
+        PopoverContent(
+            isAwake: model.isAwake,
+            statusText: model.statusText,
+            needsSetup: model.needsSetup,
+            busy: model.busy,
+            watchEnabled: model.watchEnabled,
+            watchRunning: model.watchRunning,
+            watchPattern: $model.watchPattern,
+            onToggleAwake: { model.toggle() },
+            onToggleWatch: { model.watchEnabled = $0 },
+            onRefresh: { model.refresh() },
+            onQuit: { NSApplication.shared.terminate(nil) }
+        )
     }
 }
 
