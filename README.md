@@ -72,10 +72,15 @@ Command Line Tools. macOS 13+.
   enable it, NoDoze installs a passwordless-sudo rule for `pmset` via **one**
   native admin prompt (validated with `visudo`). After that it runs silently.
 
-That rule lives at `/etc/sudoers.d/nodoze`:
+That rule lives at `/etc/sudoers.d/nodoze` and is **scoped to exactly the
+commands NoDoze runs** — not a blanket `pmset` grant. sudoers matches the full
+argument vector, so it permits only the read-only probe and the six on/off steps:
 
 ```
-<you> ALL=(root) NOPASSWD: /usr/bin/pmset
+<you> ALL=(root) NOPASSWD: /usr/bin/pmset -g, /usr/bin/pmset -a sleep 0, \
+  /usr/bin/pmset -a hibernatemode 0, /usr/bin/pmset -a disablesleep 1, \
+  /usr/bin/pmset -a sleep 1, /usr/bin/pmset -a hibernatemode 3, \
+  /usr/bin/pmset -a disablesleep 0
 ```
 
 There's nothing to run by hand. The bundled `scripts/install-sudoers.sh` /

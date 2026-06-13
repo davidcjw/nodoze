@@ -27,13 +27,6 @@ func processRunning(_ pattern: String) -> Bool {
     return code == 0
 }
 
-/// The three pmset args for the on/off state — single source of truth.
-func pmsetSteps(enable: Bool) -> [[String]] {
-    enable
-        ? [["-a", "sleep", "0"], ["-a", "hibernatemode", "0"], ["-a", "disablesleep", "1"]]
-        : [["-a", "sleep", "1"], ["-a", "hibernatemode", "3"], ["-a", "disablesleep", "0"]]
-}
-
 /// Passwordless attempt. Returns true if sudo lacked permission (needs setup).
 func applyPmset(enable: Bool) -> Bool {
     for step in pmsetSteps(enable: enable) {

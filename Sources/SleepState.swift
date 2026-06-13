@@ -9,13 +9,36 @@ func parseSleepDisabled(_ pmsetOutput: String) -> Bool {
 /// What the process-watcher should do on a given tick.
 enum WatchAction: Equatable { case keepAwake, allowSleep, doNothing }
 
-/// Shell command (run once, as root) that installs the passwordless-sudo rule
-/// for pmset — so the watcher can act silently. Validates with visudo before
-/// installing. Pure builder so it can be unit-tested; executed via an osascript
-/// admin prompt in the app.
+/// The three pmset args for the on/off state — single source of truth for what
+/// the app runs (and therefore what the sudoers rule needs to allow).
+func pmsetSteps(enable: Bool) -> [[String]] {
+    enable
+        ? [["-a", "sleep", "0"], ["-a", "hibernatemode", "0"], ["-a", "disablesleep", "1"]]
+        : [["-a", "sleep", "1"], ["-a", "hibernatemode", "3"], ["-a", "disablesleep", "0"]]
+}
+
+/// The exact `/usr/bin/pmset …` command lines the app invokes — the `-g` probe
+/// (read-only, used by passwordlessReady) plus every on/off step. sudoers
+/// matches the full argument vector, so allowlisting these grants nothing more
+/// than NoDoze's own toggles.
+func sudoersPmsetCommands() -> [String] {
+    var cmds = ["/usr/bin/pmset -g"]
+    for enable in [true, false] {
+        for step in pmsetSteps(enable: enable) {
+            cmds.append("/usr/bin/pmset " + step.joined(separator: " "))
+        }
+    }
+    return cmds
+}
+
+/// Shell command (run once, as root) that installs the passwordless-sudo rule —
+/// scoped to exactly `sudoersPmsetCommands()`, not all of pmset. Validates with
+/// visudo before installing. Pure builder so it can be unit-tested; executed via
+/// an osascript admin prompt in the app.
 func sudoersInstallCommand(user: String) -> String {
-    "t=$(mktemp); echo '\(user) ALL=(root) NOPASSWD: /usr/bin/pmset' > \"$t\"; " +
-    "/usr/sbin/visudo -cf \"$t\" && /usr/bin/install -m 0440 -o root -g wheel \"$t\" /etc/sudoers.d/nodoze; rm -f \"$t\""
+    let rule = "\(user) ALL=(root) NOPASSWD: " + sudoersPmsetCommands().joined(separator: ", ")
+    return "t=$(mktemp); echo '\(rule)' > \"$t\"; " +
+           "/usr/sbin/visudo -cf \"$t\" && /usr/bin/install -m 0440 -o root -g wheel \"$t\" /etc/sudoers.d/nodoze; rm -f \"$t\""
 }
 
 /// Subtitle shown under the "stay awake while a process runs" toggle.

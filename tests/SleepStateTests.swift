@@ -37,10 +37,25 @@ struct Tests {
         check("subtitle: not running -> sleep normal",
               watchSubtitle(enabled: true, running: false, pattern: "ollama") == "‘ollama’ not running — sleep normal")
 
+        // pmset steps — single source of truth for commands and the sudoers rule.
+        check("pmsetSteps on ends with disablesleep 1",
+              pmsetSteps(enable: true).last == ["-a", "disablesleep", "1"])
+        check("pmsetSteps off ends with disablesleep 0",
+              pmsetSteps(enable: false).last == ["-a", "disablesleep", "0"])
+
+        // Scoped sudoers allowlist: -g probe + 6 on/off steps, all argument-bound.
+        let allow = sudoersPmsetCommands()
+        check("sudoers allowlist is the 7 exact commands", allow.count == 7)
+        check("sudoers allowlist includes the read-only probe", allow.contains("/usr/bin/pmset -g"))
+        check("sudoers allowlist includes disablesleep on/off",
+              allow.contains("/usr/bin/pmset -a disablesleep 1") && allow.contains("/usr/bin/pmset -a disablesleep 0"))
+        check("sudoers allowlist is NOT a blanket pmset grant",
+              !allow.contains("/usr/bin/pmset") && allow.allSatisfy { $0.hasPrefix("/usr/bin/pmset ") })
+
         // Sudoers install command builder.
         let cmd = sudoersInstallCommand(user: "alice")
-        check("sudoers cmd: includes user + NOPASSWD pmset",
-              cmd.contains("alice ALL=(root) NOPASSWD: /usr/bin/pmset"))
+        check("sudoers cmd: scoped rule for alice, not blanket pmset",
+              cmd.contains("alice ALL=(root) NOPASSWD: /usr/bin/pmset -g,") && !cmd.contains("NOPASSWD: /usr/bin/pmset\n"))
         check("sudoers cmd: validates with visudo",
               cmd.contains("/usr/sbin/visudo -cf"))
         check("sudoers cmd: installs to /etc/sudoers.d/nodoze with 0440",

@@ -40,6 +40,11 @@ Purpose: keep a laptop awake (incl. lid-closed) while AI agents run.
 - The toggle MUST keep matching the aliases exactly:
   on = `sleep 0` / `hibernatemode 0` / `disablesleep 1`;
   off = `sleep 1` / `hibernatemode 3` / `disablesleep 0`.
+- `pmsetSteps` (SleepState.swift) is the single source of truth for these
+  commands AND feeds `sudoersPmsetCommands()`, which scopes the sudoers rule to
+  exactly those invocations + the `/usr/bin/pmset -g` probe (NOT a blanket pmset
+  grant). If you change the commands, the allowlist and `passwordlessReady()`'s
+  probe must stay consistent — sudoers matches the full argument vector.
 - State source of truth is `pmset -g` → `SleepDisabled 1`. Don't track state in
   app memory; always re-read after a toggle (`SleepModel.refresh()`).
 - Process-watch mode: `watchDecision(running:isAwake:owned:)` in
