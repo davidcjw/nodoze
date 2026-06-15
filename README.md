@@ -1,5 +1,9 @@
 # NoDoze ☕
 
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
+![Platform: macOS 13+](https://img.shields.io/badge/platform-macOS%2013%2B-lightgrey?logo=apple)
+![Swift](https://img.shields.io/badge/Swift-SwiftUI-orange?logo=swift)
+
 A dead-simple macOS menu bar app: one toggle to keep your Mac awake — built for
 running agents on a laptop that must never sleep, even with the lid shut.
 
@@ -157,3 +161,23 @@ tests/                     SleepState unit tests
 ```
 
 `build.sh` rebuilds it automatically if `AppIcon.icns` is missing.
+
+## Contributing
+
+Contributions are welcome! Please open an issue first to discuss what you'd like to change.
+
+1. Fork the repo
+2. Create a feature branch (`git checkout -b feature/your-feature`)
+3. Commit your changes (`git commit -m 'feat: describe change'`)
+4. Push and open a pull request
+
+Please run `./tests/run_tests.sh` and confirm `./build.sh` succeeds before submitting a PR.
+
+## Code of Conduct
+
+This project follows the [Contributor Covenant v2.1](https://www.contributor-covenant.org/version/2/1/code_of_conduct/).
+By participating you agree to uphold a welcoming, harassment-free environment.
+
+## License
+
+Distributed under the MIT License. See [LICENSE](LICENSE) for details.
