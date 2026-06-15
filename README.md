@@ -120,8 +120,8 @@ Two things to know about distributing an unsigned app:
 
 The live cask lives at
 [davidcjw/homebrew-tap](https://github.com/davidcjw/homebrew-tap/blob/main/Casks/nodoze.rb).
-Cutting a new release: bump `version`, run `./scripts/make-release.sh`, upload
-the zip to a GitHub release, and paste the printed `sha256` into the cask.
+For the full step-by-step (bump version, build, tag, release, update cask,
+upgrade your own machine), see [RELEASING.md](RELEASING.md).
 
 ## Tests
 
