@@ -28,6 +28,10 @@ Flip on **"Stay awake while a process runs"** and type a process name
 - restores normal sleep once it exits — but only the awake state it set itself,
   so a manual "Keep Mac Awake" is never undone behind your back.
 
+Turning **"Keep Mac Awake" off** acts as a kill switch: it also switches watch
+mode off, so the watcher can't re-grab keep-awake while the process is still
+running. Re-enable watch mode when you want it back.
+
 The watched name and on/off state persist across launches.
 
 ## Why pmset, not caffeinate?

@@ -108,7 +108,18 @@ final class SleepModel: ObservableObject {
     /// Manual toggle from the switch. Allows an admin prompt if passwordless
     /// sudo isn't set up. Clears watcher ownership so the watcher won't later
     /// undo a deliberate choice.
-    func toggle() { apply(enable: !isAwake, allowPrompt: true) { self.owned = false } }
+    ///
+    /// Turning NoDoze *off* is a kill switch: it also disables watch mode.
+    /// Otherwise the 8s watcher would re-grab keep-awake within seconds while the
+    /// watched process is still running, leaving the Mac unable to sleep.
+    func toggle() {
+        let enable = !isAwake
+        if !enable {
+            owned = false           // before watchEnabled=false so reschedule() won't re-apply
+            watchEnabled = false    // stops the watcher's timer
+        }
+        apply(enable: enable, allowPrompt: true) { self.owned = false }
+    }
 
     /// - allowPrompt: if passwordless sudo fails, fall back to a native admin
     ///   prompt. True for manual toggles, false for the watcher (no nagging).
